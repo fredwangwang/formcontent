@@ -7,7 +7,6 @@ import (
 	"os"
 	"errors"
 	"path/filepath"
-	"fmt"
 )
 
 type Form struct {
@@ -74,8 +73,6 @@ func (f *Form) AddFile(key string, path string) error {
 	f.length += fileLength
 	f.length += int64(buf.Len())
 
-	fmt.Println(buf.String() + "***")
-
 	f.files = append(f.files, path)
 	f.fileKeys = append(f.fileKeys, buf)
 
@@ -83,13 +80,12 @@ func (f *Form) AddFile(key string, path string) error {
 }
 
 func (f *Form) Finalize() (ContentSubmission, error) {
-	trailingBoundary, err := f.generateTrailingBoundary()
-	if err != nil {
-		return ContentSubmission{}, err
-	}
+	f.formWriter.Close()
 
-	f.length += int64(trailingBoundary.Len())
+	// add the length of form fields, including trailing boundary
+	f.length += int64(f.formFields.Len())
 
+	// TODO: wrong
 	if len(f.files) > 0 {
 		f.length += int64(2 * (len(f.files) - 1))
 	}
@@ -123,16 +119,11 @@ func verifyFile(path string) (int64, error) {
 	return stats.Size(), nil
 }
 
-func (f *Form) generateTrailingBoundary() (buf *bytes.Buffer, err error) {
-	buf = &bytes.Buffer{}
-	_, err = fmt.Fprintf(buf, "\r\n--%s--\r\n", f.boundary)
-	return
-}
-
 func (f *Form) writeToPipe() {
 	var err error
 	separate := false
 
+	// write files
 	for i, key := range f.fileKeys {
 		if separate {
 			f.pw.Write([]byte("\r\n"))
@@ -154,13 +145,8 @@ func (f *Form) writeToPipe() {
 		separate = true
 	}
 
-	trailingBoundary, err := f.generateTrailingBoundary()
-	if err != nil {
-		f.pw.CloseWithError(err)
-		return
-	}
-
-	_, err = io.Copy(f.pw, trailingBoundary)
+	// write fields
+	_, err = io.Copy(f.pw, f.formFields)
 	if err != nil {
 		f.pw.CloseWithError(err)
 		return

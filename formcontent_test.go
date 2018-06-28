@@ -6,8 +6,8 @@ import (
 
 	"io/ioutil"
 	"os"
-	"formcontent"
-	"log"
+	"github.com/fredwangwang/formcontent"
+	"fmt"
 )
 
 var _ = Describe("Formcontent", func() {
@@ -57,8 +57,6 @@ var _ = Describe("Formcontent", func() {
 			content, err := ioutil.ReadAll(submission.Content)
 			Expect(err).NotTo(HaveOccurred())
 
-			log.Println(string(content))
-
 			Expect(string(content)).To(ContainSubstring("name=\"something[file1]\""))
 			Expect(string(content)).To(ContainSubstring("some content"))
 			Expect(string(content)).To(ContainSubstring("name=\"something[file2]\""))
@@ -107,21 +105,44 @@ var _ = Describe("Formcontent", func() {
 			err = form.AddField("key2", "value2")
 			Expect(err).NotTo(HaveOccurred())
 
-			err = form.AddField("key3", "value3")
-			Expect(err).NotTo(HaveOccurred())
-
 			submission, err := form.Finalize()
 			Expect(err).NotTo(HaveOccurred())
 
 			content, err := ioutil.ReadAll(submission.Content)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(string(content)).To(ContainSubstring("name=\"key1\""))
-			Expect(string(content)).To(ContainSubstring("value1"))
-			Expect(string(content)).To(ContainSubstring("name=\"key2\""))
-			Expect(string(content)).To(ContainSubstring("value2"))
-			Expect(string(content)).To(ContainSubstring("name=\"key3\""))
-			Expect(string(content)).To(ContainSubstring("value3"))
+			fmt.Println(string(content))
+
+			Expect(string(content)).To(MatchRegexp(`^--\w+\r\nContent-Disposition: form-data; name="key1"\r\n\r\nvalue1` +
+				`\r\n--\w+\r\nContent-Disposition: form-data; name="key2"\r\n\r\nvalue2` +
+				`\r\n--\w+--\r\n$`))
 		})
+	})
+
+	Describe("Finalize", func() {
+		var form *formcontent.Form
+
+		BeforeEach(func() {
+			var err error
+			form, err = formcontent.NewForm()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns a content submission which includes the correct length and content type", func() {
+			err := form.AddField("key1", "value1")
+			Expect(err).NotTo(HaveOccurred())
+
+			submission, err := form.Finalize()
+			Expect(err).NotTo(HaveOccurred())
+
+			//content, err := ioutil.ReadAll(submission.Content)
+			//Expect(err).NotTo(HaveOccurred())
+			//
+			//log.Println(string(content))
+
+			Expect(submission.Length).To(Equal(int64(185)))
+			Expect(submission.ContentType).To(ContainSubstring("multipart/form-data"))
+		})
+
 	})
 })
