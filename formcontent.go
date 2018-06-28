@@ -22,12 +22,12 @@ type Form struct {
 }
 
 type ContentSubmission struct {
-	Length      int64
-	Content     io.Reader
-	ContentType string
+	Content       io.Reader
+	ContentType   string
+	ContentLength int64
 }
 
-func NewForm() (*Form, error) {
+func NewForm() (*Form) {
 	buf := &bytes.Buffer{}
 
 	pr, pw := io.Pipe()
@@ -41,7 +41,7 @@ func NewForm() (*Form, error) {
 		pw:          pw,
 		formFields:  buf,
 		formWriter:  formWriter,
-	}, nil
+	}
 }
 
 func (f *Form) AddField(key string, value string) error {
@@ -80,7 +80,7 @@ func (f *Form) AddFile(key string, path string) error {
 	return nil
 }
 
-func (f *Form) Finalize() (ContentSubmission, error) {
+func (f *Form) Finalize() (ContentSubmission) {
 	f.formWriter.Close()
 
 	// add the length of form fields, including trailing boundary
@@ -97,10 +97,10 @@ func (f *Form) Finalize() (ContentSubmission, error) {
 	go f.writeToPipe()
 
 	return ContentSubmission{
-		Length:      f.length,
-		Content:     f.pr,
-		ContentType: f.contentType,
-	}, nil
+		ContentLength: f.length,
+		Content:       f.pr,
+		ContentType:   f.contentType,
+	}
 }
 
 func verifyFile(path string) (int64, error) {
