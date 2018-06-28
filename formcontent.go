@@ -1,11 +1,11 @@
 package formcontent
 
 import (
+	"bytes"
+	"errors"
 	"io"
 	"mime/multipart"
-	"bytes"
 	"os"
-	"errors"
 	"path/filepath"
 )
 
@@ -70,6 +70,7 @@ func (f *Form) AddFile(key string, path string) error {
 		return err
 	}
 
+	// add the length of form fields, including trailing boundary
 	f.length += fileLength
 	f.length += int64(buf.Len())
 
@@ -85,9 +86,12 @@ func (f *Form) Finalize() (ContentSubmission, error) {
 	// add the length of form fields, including trailing boundary
 	f.length += int64(f.formFields.Len())
 
-	// TODO: wrong
+	// add the length of `\r\n` between fields
 	if len(f.files) > 0 {
 		f.length += int64(2 * (len(f.files) - 1))
+		if f.formFields.Len() > len(f.boundary)+8 {
+			f.length += 2
+		}
 	}
 
 	go f.writeToPipe()
@@ -126,7 +130,11 @@ func (f *Form) writeToPipe() {
 	// write files
 	for i, key := range f.fileKeys {
 		if separate {
-			f.pw.Write([]byte("\r\n"))
+			_, err = f.pw.Write([]byte("\r\n"))
+			if err != nil {
+				f.pw.CloseWithError(err)
+				return
+			}
 		}
 
 		_, err = io.Copy(f.pw, key)
@@ -146,6 +154,14 @@ func (f *Form) writeToPipe() {
 	}
 
 	// write fields
+	if separate && f.formFields.Len() > len(f.boundary)+8 { // boundary+8 =>format: \r\n--boundary-words--\r\n
+		_, err = f.pw.Write([]byte("\r\n"))
+		if err != nil {
+			f.pw.CloseWithError(err)
+			return
+		}
+	}
+
 	_, err = io.Copy(f.pw, f.formFields)
 	if err != nil {
 		f.pw.CloseWithError(err)

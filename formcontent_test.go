@@ -4,18 +4,18 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/fredwangwang/formcontent"
 	"io/ioutil"
 	"os"
-	"github.com/fredwangwang/formcontent"
-	"fmt"
 )
 
 var _ = Describe("Formcontent", func() {
+	var form *formcontent.Form
+
 	Describe("AddFile", func() {
 		var (
 			fileWithContent1 string
 			fileWithContent2 string
-			form             *formcontent.Form
 		)
 
 		BeforeEach(func() {
@@ -57,10 +57,13 @@ var _ = Describe("Formcontent", func() {
 			content, err := ioutil.ReadAll(submission.Content)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(string(content)).To(ContainSubstring("name=\"something[file1]\""))
-			Expect(string(content)).To(ContainSubstring("some content"))
-			Expect(string(content)).To(ContainSubstring("name=\"something[file2]\""))
-			Expect(string(content)).To(ContainSubstring("some more content"))
+			Expect(string(content)).To(MatchRegexp(`^--\w+\r\nContent-Disposition: form-data; name=\"something\[file1\]\"; filename=\"\w+\"\r\n` +
+				`Content-Type: application/octet-stream\r\n\r\n` +
+				`some content` +
+				`\r\n--\w+\r\nContent-Disposition: form-data; name=\"something\[file2\]\"; filename=\"\w+\"\r\n` +
+				`Content-Type: application/octet-stream\r\n\r\n` +
+				`some more content` +
+				`\r\n--\w+--\r\n$`))
 		})
 
 		Context("when the file provided is empty", func() {
@@ -90,8 +93,6 @@ var _ = Describe("Formcontent", func() {
 	})
 
 	Describe("AddField", func() {
-		var form *formcontent.Form
-
 		BeforeEach(func() {
 			var err error
 			form, err = formcontent.NewForm()
@@ -111,10 +112,52 @@ var _ = Describe("Formcontent", func() {
 			content, err := ioutil.ReadAll(submission.Content)
 			Expect(err).NotTo(HaveOccurred())
 
-			fmt.Println(string(content))
-
 			Expect(string(content)).To(MatchRegexp(`^--\w+\r\nContent-Disposition: form-data; name="key1"\r\n\r\nvalue1` +
 				`\r\n--\w+\r\nContent-Disposition: form-data; name="key2"\r\n\r\nvalue2` +
+				`\r\n--\w+--\r\n$`))
+		})
+	})
+
+	Describe("AddCombined", func() {
+		var fileWithContent1 string
+
+		BeforeEach(func() {
+			var err error
+
+			handle1, err := ioutil.TempFile("", "")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = handle1.WriteString("some content")
+			Expect(err).NotTo(HaveOccurred())
+
+			fileWithContent1 = handle1.Name()
+
+			form, err = formcontent.NewForm()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			os.Remove(fileWithContent1)
+		})
+
+		It("writes out the provided fields into the multipart form using the writer", func() {
+			err := form.AddField("key1", "value1")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = form.AddFile("file1", fileWithContent1)
+			Expect(err).NotTo(HaveOccurred())
+
+			submission, err := form.Finalize()
+			Expect(err).NotTo(HaveOccurred())
+
+			content, err := ioutil.ReadAll(submission.Content)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(submission.Length).To(Equal(int64(373)))
+			Expect(string(content)).To(MatchRegexp(`^--\w+\r\nContent-Disposition: form-data; name=\"file1\"; filename=\"\w+\"\r\n` +
+				`Content-Type: application/octet-stream\r\n\r\n` +
+				`some content` +
+				`\r\n--\w+\r\nContent-Disposition: form-data; name="key1"\r\n\r\nvalue1` +
 				`\r\n--\w+--\r\n$`))
 		})
 	})
@@ -134,11 +177,6 @@ var _ = Describe("Formcontent", func() {
 
 			submission, err := form.Finalize()
 			Expect(err).NotTo(HaveOccurred())
-
-			//content, err := ioutil.ReadAll(submission.Content)
-			//Expect(err).NotTo(HaveOccurred())
-			//
-			//log.Println(string(content))
 
 			Expect(submission.Length).To(Equal(int64(185)))
 			Expect(submission.ContentType).To(ContainSubstring("multipart/form-data"))
