@@ -4,9 +4,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/fredwangwang/formcontent"
 	"io/ioutil"
 	"os"
+
+	"github.com/fredwangwang/formcontent"
 )
 
 var _ = Describe("Formcontent", func() {
@@ -82,7 +83,7 @@ var _ = Describe("Formcontent", func() {
 					form := formcontent.NewForm()
 
 					err := form.AddFile("foo", "/file/does/not/exist")
-					Expect(err).To(MatchError(ContainSubstring("no such file or directory")))
+					Expect(err).To(HaveOccurred())
 				})
 			})
 		})

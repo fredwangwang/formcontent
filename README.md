@@ -1,7 +1,5 @@
 This helper library allows you upload large file without loading the file content into the memory.
 
-[non-threaded](https://github.com/fredwangwang/formcontent/tree/non-threaded)
-
 [example](https://gist.github.com/fredwangwang/8c86a34da27c2bc9ded3a38968576e4a):
 ```go
 package main
